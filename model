@@ -1,0 +1,52 @@
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+
+/**
+ * Manufacturer_model class.
+ * 
+ * @extends CI_Model
+ */
+class Manufacturer_model extends CI_Model {
+
+	/**
+	 * __construct function.
+	 * 
+	 * @access public
+	 * @return void
+	 */
+	public function __construct() {
+		
+		parent::__construct();
+		$this->load->database();
+	}
+	
+    public function getall()
+    {
+        $result = $this->db->get("manufacturer");
+        return $result->result();
+
+    }
+    public function get_manufacturer_by_id($id)
+    {
+    	$result = $this->db->query("SELECT * FROM manufacturer WHERE id = " . $id);
+        return $result->row();
+    }
+    public function update_manufacturer($data , $id)
+    {
+    	$this->db->WHERE('id' , $id);
+    	return $this->db->update('manufacturer' , $data);
+    }
+   public function delete_manufacturers($id)
+    {
+        $this->db->WHERE('id',$id);
+        return $this->db->delete('manufacturer');
+    }
+    public function add_manufacturer($data)
+    {
+       $this->db->insert('manufacturer', $data);
+        return $this->db->insert_id();
+        
+    }
+    
+}
+
