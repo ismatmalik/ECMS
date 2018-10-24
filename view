@@ -1,0 +1,86 @@
+  <!-- page content -->
+<div class="right_col" role="main">
+
+    <div class="page-title">
+        <div class="title_left">
+            <h3><?=$page_title ?><small></small></h3>
+        </div>
+
+       
+    </div>
+    <div class="row">
+              <div class="col-md-12">
+                <div class="x_panel">
+                  <div class="x_title">
+                    <h2><?=$section_title ?></h2>
+                    <ul class="nav navbar-right panel_toolbox">
+                      <li><a class="collapse-link"><i class="fa fa-chevron-up"></i></a>
+                      </li>
+                    </ul>
+                    <div class="clearfix"></div>
+                  </div>
+                  <div class="x_content">
+
+                    <!-- start project list -->
+                    <table class="table table-striped projects">
+                      <thead>
+                        <tr>
+                          <th>Serial Number</th>
+                          <th>Picture</th>
+                          <th >Name</th>
+                          <th>Manufacturer</th>
+                          <th>Group</th>
+                          <th>Family</th>
+                          <th>Sub Family</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <?php
+                        foreach ($equipments as $row) {
+                           echo '<tr><td>'.$row->serial_number.'</td><td><img style="width:70px;height:70px;" src="'.EQUIPMENT_IMAGE_PATH.$row->picture.'" alt="Image"></td>';
+                           echo '<td>'.$row->name.'</td><td>'.$row->manufacturer_name.'</td><td>'.$row->equipment_group.'</td>';
+                           echo '<td>'.$row->equipment_family.'</td><td>'.$row->equipment_subfamily.'</td><td>';
+                           echo '<a href="'.base_url('Equipment/detail/'.$row->id).'" class="btn btn-primary btn-xs" ><i class="fa fa-eye"></i> View </a>
+                                <a href="'.base_url('Equipment/edit/'.$row->id).'" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i> Edit </a>
+                                <a href="#" class="btn btn-danger btn-xs  delete_item btn-xs" data-pk="'.$row->id.'" data-action-type="equipment" ><i class="fa fa-trash-o"></i> Delete </a>';
+                           echo '</td></tr>';
+                        }
+                        ?>
+
+
+                        <!-- 
+                        <tr>
+                          <td>3</td>
+                          <td>
+                            <a>Hydraulic Excavator</a>
+                            <br>
+                            <small>Created Sep 20, 2017</small>
+                          </td>
+                          <td>
+                           
+                          </td>
+                          <td class="project_progress">
+                            <div class="progress progress_sm">
+                              <div class="progress-bar bg-green" role="progressbar" data-transitiongoal="10" aria-valuenow="2" ></div>
+                            </div>
+                            <small>10%</small>
+                          </td>
+                          <td>
+                           
+                          </td>
+                          <td>
+                           
+                            <a href="<?= base_url('Equipment/Type/edit/3') ?>" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i> Edit </a>
+                            <a href="#" class="btn btn-danger btn-xs"><i class="fa fa-trash-o"></i> Delete </a>
+                          </td>
+                        </tr> -->
+                      </tbody>
+                    </table>
+                    <!-- end project list -->
+
+                  </div>
+                </div>
+              </div>
+            </div>
+</div>
