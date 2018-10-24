@@ -1,0 +1,2452 @@
+<?php
+defined('BASEPATH') OR exit('No direct script access allowed');
+require(APPPATH.'/libraries/XLSXReader.php');
+require(APPPATH.'/libraries/PHPExcel.php');
+
+/**
+ * User class.
+ * 
+ * @extends CI_Controller
+ */
+class Requests extends CI_Controller
+{
+	/**
+	 * __construct function.
+	 * 
+	 * @access public
+	 * @return void
+	 */
+	public function __construct() 
+	{
+		parent::__construct();
+		$this->load->library('Ajax_pagination');
+		$this->perPage =2;
+	}
+	public function index() 
+	{
+		//echo "string";
+		print_r(array());
+		die();
+	}
+	public function globalsearch(){
+		print_r(array());
+		die();
+	}
+	public function check_login() 
+	{
+		$params = $this->input->post();
+		$username = $params['email'];
+		$password = $params['password'];
+		$result = $this->User_model->user_login($username,$password); 
+		if(!$result)
+			die(json_encode(array('flag' => 0,'message' => 'Invalid Email or Password.')));
+		else
+		{
+			/*$permissions=$this->Permissions_model->getrolepermissions($result->role_id);
+			if(!$permissions)
+				$permissions=array();*/
+			
+			$session_data = array(
+			   'is_user_logged_in'  =>   true,
+			   'user_login_id'		=> $result->id,
+			   'student_id' => $result->id,
+               'name'  	=> $result->name,
+               'middle_name' => $result->middle_name,
+               'last_name'=>$result->last_name,
+               'picture'   => IMAGE_PATH . $result->picture,
+               'email'     => $result->email,
+               'role_id'   => $result->role_id,
+               'default_location'   => $result->default_location,
+               'permissions'  =>  $permissions
+               
+            );
+		
+			$this->session->set_userdata($session_data);
+			die(json_encode(array('flag' => 1,'message'	=> 'Success')));
+		}
+	}
+	public function records()
+	{
+		$params = $this->input->post();
+		/*$ss= $params['search'];
+		$s = $ss['value'];
+		print_r($s);
+		die();*/
+		$totalRec = $this->Test_model->total_country();
+		$location  = $this->Test_model->country($params);
+		if(!$location)
+			$location=array();
+		$result=array();
+		foreach ($location as $row) {
+			$single=array($row->id,$row->name,$row->picture,$row->datetime);
+			array_push($result,$single);
+		}
+		$output = array(
+	        "draw" => $params["draw"],
+	        "recordsTotal" => count($location),
+	        "recordsFiltered" =>count($location),
+	        "data" => $result
+	    );
+		echo  json_encode($output);
+
+		die();
+		
+		//die( json_encode( $output ));
+		/*$location  = $this->Test_model->country();
+
+		if ($location) {
+			//$arr = array("draw"=>1,"recordsT"=>57 , "recordsF" =>57 , "dat" =>$location);
+			die(json_encode(array('draw' => 1,'recordsT' => 57 , 'recordsF' =>57,'dat'=>$location)));
+		}
+		else
+		{
+			die(json_encode(array('flag' => 0,'message'	=> 'Error')));
+		}*/
+	}
+	public function get_user_detail() 
+	{
+		$params = $this->input->post();
+		$user_id = $params['user_id'];
+		$data['user_data'] = $this->User->get_user_data($user_id);
+		
+		$this->load->view('pages/users/user_detail',$data);
+	}
+	
+
+	/*
+        |--------------------------------------------------------------------------|
+        					          INSERT FORMS DATA												
+        |--------------------------------------------------------------------------|
+    */
+	public function save_data() 
+	{
+		$params = $this->input->post();
+		if(!isset($params['action_type']))
+			die(json_encode(array('flag'=>1,'message'=>'Record saved successfully')));
+		
+		switch ($params['action_type']) 
+		{
+			case 'add_certification_type':
+				$this->add_certification_type($params);
+				break;
+				
+			case 'add_student':
+				$this->add_student($params);
+				break;
+			case 'add_equipment':
+				$this->add_equipment($params);
+				break;
+			case 'country':
+				$this->add_country($params);
+				break;
+			case 'division':
+				$this->add_division($params);
+				break;
+			case 'add_role':
+				$this->add_role($params);
+				break;
+			case 'company':
+				$this->add_company($params);
+				break;
+			case 'location':
+				$this->add_location($params);
+				break;
+			case 'admins':
+				$this->add_admin($params);
+				break;
+			case 'add_atttributes_to_equipment':
+				$this->add_atttributes_to_equipment($params);
+				break;
+			case 'add_inspection_company':
+				$this->add_inspection_company($params);
+				break;
+			case 'add_equipment_type':
+				$this->add_equipment_type($params);
+				break;
+			case 'add_manufacturer':
+				$this->add_manufacturer($params);
+				break;
+			case 'add_users':
+				$this->add_users($params);
+				break;
+			default:
+				die(json_encode(array('flag'=>1,'message'=>'Record saved successfully')));
+				break;
+		}
+	}
+	function add_student($params)
+	{
+		$email = $params['email'];
+		$re = $this->User_model->check_student($email);
+		if ($re) 
+			die(json_encode(array('flag'=>0, 'message'=>'Email already exists.')));
+		$profile_picture = '';
+		if(!empty($_FILES) && !empty( $_FILES['profile_picture']['name'] ) && $_FILES['profile_picture']['error']!=1)
+		{
+            
+            $extension = pathinfo($_FILES['profile_picture']['name'], PATHINFO_EXTENSION);
+            $profile_picture = 'user'.uniqid().'.'.$extension;
+            $file = USER_IMAGE_PATH_NORMAL.$profile_picture;
+            if(!move_uploaded_file($_FILES['profile_picture']['tmp_name'], $file))
+	           	die(json_encode(array('flag'=>0,'message'=>'Error in Image uploading')));
+		    $data['picture'] = $profile_picture;
+		}
+		$data['first_name'] = $params['first_name'];
+		$data['last_name'] = $params['last_name'];
+		$data['email'] = $params['email'];
+		$data['password'] = $params['password'];
+		$data['middle_name'] = $params['midle_name'];
+		$student_id = $this->User_model->add_students($data);
+		
+		if ($student_id) {
+			foreach($params['subject_id'] as $subject_id){
+				$dat=array('subject_id'=>$subject_id , 'student_id'=>$student_id );
+				$result = $this->User_model->add_student_subject($dat);
+			}	
+		}
+		
+		if ($result) {
+			die(json_encode(array('flag' => 1, 'message' => 'Information saved Successfully.' , 'url'=>'User/view')));
+		}
+		else{
+			die(json_encode(array('flag' => 0 , 'message' => 'Sorry not inserted')));
+		}
+	}
+	function add_users($params)
+	{
+		if (isset($params['attach_location']) && $params['attach_location'][0] =='') {
+			/*if(sizeof($attach_loc) <= 1)*/
+				die(json_encode(array('flag'=>0, 'message'=>'Location is not selected ,Please select location first.')));
+		}
+		$email = $params['email'];
+		$re = $this->User_model->check_user($email);
+		if ($re) 
+			die(json_encode(array('flag'=>0, 'message'=>'Email already exists.')));
+		$profile_picture = '';
+		if(!empty($_FILES) && !empty( $_FILES['profile_picture']['name'] ) && $_FILES['profile_picture']['error']!=1)
+		{
+            
+            $extension = pathinfo($_FILES['profile_picture']['name'], PATHINFO_EXTENSION);
+            $profile_picture = 'user'.uniqid().'.'.$extension;
+            $file = USER_IMAGE_PATH_NORMAL.$profile_picture;
+            if(!move_uploaded_file($_FILES['profile_picture']['tmp_name'], $file))
+	           	die(json_encode(array('flag'=>0,'message'=>'Error in Image uploading')));
+		    $data['picture'] = $profile_picture;
+		}
+		$data['name'] = $params['first_name'];
+		$data['last_name'] = $params['last_name'];
+		$data['email'] = $params['email'];
+		$data['password'] = $params['password'];
+		$data['middle_name'] = $params['midle_name'];
+		$data['badge_number'] = $params['badge_no'];
+		$data['role_id'] = $params['select_role'];
+		$data['datetime'] = date('Y-m-d H:i:s');
+		$user_id = $this->User_model->add_users($data);
+		if($params["select_role"]!=1)
+		{
+			$loc = $params['attach_location'];
+			$loc_str = implode(',', $loc);
+			$params['attach_location']=explode(',' , $loc_str);
+			if ($user_id) {
+				foreach($params['attach_location'] as $location_id){
+					$dat=array('location_id'=>$location_id , 'user_id'=>$user_id , 'datetime' => date('Y-m-d H:i:s'));
+					$result = $this->User_model->add_attach_user_location($dat);
+				}	
+			}
+		}
+		if ($result) {
+			die(json_encode(array('flag' => 1, 'message' => 'Information saved Successfully.' , 'url'=>'User/view')));
+		}
+		else{
+			die(json_encode(array('flag' => 0 , 'message' => 'Sorry not inserted')));
+		}
+	}
+	public function save_uploaded_file() 
+	{
+		$params = $this->input->post();
+		
+		
+		switch ($params['action_type']) 
+		{
+			case 'add_document':
+				$this->save_document($params);
+				break;
+			case 'save_file':
+				$this->save_file($params);
+				break;
+			default:
+				die(json_encode(array('flag'=>1,'message'=>'Record saved successfully')));
+				break;
+		}
+	}
+	function save_document($params)
+	{
+		$data = array();
+		$document = '';
+		
+		if(!empty($_FILES) && !empty( $_FILES['post_file']['name'] ) && $_FILES['post_file']['error']!=1)
+		{
+            
+            $extension = pathinfo($_FILES['post_file']['name'], PATHINFO_EXTENSION);
+            $document = 'doc'.uniqid().'.'.$extension;
+            $file = DOCUMENT_PATH_NORMAL.$document;
+            if(!move_uploaded_file($_FILES['post_file']['tmp_name'], $file))
+            	die(json_encode(array('flag'=>0,'message'=>'Error in file uploading')));
+
+		    $data['file'] = $document;
+		    $data['type'] = $extension;
+		}
+		$default_location=$this->session->userdata["default_location"];
+		$data['location_id'] = $default_location;
+		$data['name'] = $params['document'];
+		$data['datetime'] = date('Y-m-d H:i:s');
+
+		$result=$this->Document_model->add_document($data);
+		if($result)
+			die(json_encode(array('flag'=>1, 'message'=>'Information saved Successfully.')));
+		else
+			die(json_encode(array('flag'=>0, 'message'=>'DB operation failed')));
+	
+	}
+	function add_inspection_company($params)
+	{
+		$pre='<div class="item form-group ">
+                            
+                            <div class="col-md-8 margin-auto" style="text-align:left;"><div class="dynamic-outer">
+                                ';
+        $after='
+                            <a class="close-link close-dynamic"><i class="fa fa-close"></i></a></div></div>
+                            
+                    	   <!--  <div class="alert">please put something here</div> -->
+                        </div>';
+		$tag_id=uniqid();$result=1;
+		$content='<tg id="'.$result.'"><h4>'.$params["inspection_company_name"].'</h4></tg>';
+					die(json_encode(array('flag'=>1, 'message'=>'Question saved Successfully.','question_data'=>$pre.$content.$after)));
+	}
+	
+	/*
+        |--------------------------------------------------------------------------|
+        					          UPDATE FORMS DATA												
+        |--------------------------------------------------------------------------|
+    */
+	public function edit_data($action_type = '') 
+	{
+		$params = $this->input->post();
+		if(!isset($params['action_type']))
+			die(json_encode(array('flag'=>1,'message'=>'Changes saved successfully')));
+		$action_type=$params["action_type"];
+		switch ($action_type) 
+		{
+			case 'country':
+				$this->edit_country($params);
+				break;
+			case 'division':
+				$this->edit_division($params);
+				break;
+			case 'location':
+				$this->edit_location($params);
+				break;
+			case 'setting':
+				$this->update_setting($params);
+				break;
+			case 'company':
+				$this->edit_company($params);
+				break;
+			
+			case 'edit_role':
+				$this->edit_role($params);
+				break;
+			case 'admin':
+				$this->edit_admin($params);
+				break;
+			case 'edit_certification_type':
+				$this->edit_certification_type($params);
+				break;
+			case 'edit_equipment_type':
+				$this->edit_equipment_type($params);
+			case 'users':
+				$this->edit_users($params);
+				break;
+			case 'edit_equipment':
+				$this->edit_equipment($params);
+				break;
+			case 'manufacturers':
+				$this->edit_manufacturer($params);
+				break;
+			default:
+				die(json_encode(array('flag'=>0,'message'=>'Invalid Action Type.')));
+				break;
+		}
+	}
+
+	/*
+        |--------------------------------------------------------------------------|
+        					          DELETE FORMS DATA												
+        |--------------------------------------------------------------------------|
+    */
+	public function delete_data() 
+	{
+		$params = $this->input->post();
+		if(!isset($params['action_type']))
+			die(json_encode(array('flag' => 1,'message' => 'Record Deleted.')));
+		
+		switch ($params['action_type']) 
+		{
+			case 'country':
+				$this->delete_country($params);
+				break;
+			case 'location':
+				$this->delete_location($params);
+				break;
+			case 'role':
+				$this->delete_role($params);
+				break;
+			case 'division':
+				$this->delete_division($params);
+				break;
+			case 'company':
+				$this->delete_company($params);
+				break;
+			case 'users':
+				$this->delete_user($params);
+				break;
+			case 'submissions':
+				$this->delete_submission($params);
+				break;
+			case 'admins':
+				$this->delete_admin($params);
+				break;
+			case 'manufacturer':
+				$this->delete_manufacturer($params);
+				break;
+			case 'equipment_type':
+				$this->delete_equipment_type($params);
+				break;	
+			case 'certificate_type':
+				$this->delete_certificate_type($params);
+				break;
+			case 'equipment':
+				$this->delete_equipment($params);
+				break;
+			default:
+				die(json_encode(array('flag'=>0,'message'=>'Invalid Action Type.')));
+				break;
+		}
+	}
+	public function get_country_company(){
+		$params = $this->input->post();
+			
+		$companies=$this->Company_model->get_company_by_country_id($params['id']);
+		 echo '<option value="" selected disabled >Select Company</option>';
+		if(!$companies)
+			die('');
+   		foreach ($companies as $row) 
+   		{
+            echo '<option value="'.$row->id.'">'.$row->name.'</option>';
+        } 
+	}
+	public function get_company_division(){
+		$params = $this->input->post();
+			
+		$divisions=$this->Division_model->get_division_by_company_id($params['id']);
+		 echo '<option value="" selected disabled >Select Division</option>';
+		if(!$divisions)
+			die('');
+   		foreach ($divisions as $row) 
+   		{
+            echo '<option value="'.$row->id.'">'.$row->name.'</option>';
+        } 
+	}/*
+	   |--------------------------------------------------------------------------|
+        					          Pagination Data												
+        |--------------------------------------------------------------------------|
+    */
+	public function pagination_table()
+	{
+		$params = $this->input->post();
+		switch ($params['action_type']) 
+		{
+			case 'location':
+				$this->location($params);
+				break;
+			case 'users':
+				$this->users($params);
+				break;
+			case 'divisions':
+				$this->divisions($params);
+				break;
+			case 'company':
+				$this->companies($params);
+				break;
+			
+			case 'add_location':
+				$this->user_add_location($params);
+				break;
+			case 'documents':
+				$this->documents($params);
+				break;
+			default:
+				die(json_encode(array('flag'=>1,'message'=>'Record saved successfully')));
+				break;
+		}
+	}
+	/*
+        |--------------------------------------------------------------------------|
+        					          USERS FUNCTIONS												
+        |--------------------------------------------------------------------------|
+    */
+
+    function validateDate($date, $format = 'Y-m-d')
+    {
+        $d = DateTime::createFromFormat($format, $date);
+        return $d && $d->format($format) == $date;
+    }	
+	function delete_beam()
+	{
+		$params = $this->input->post();
+		$result = $this->Beam->delete_beam($params['post_id']);
+		if($result)
+			die(json_encode(array('flag'=>1,'message'=>'Beam Deleted Successfully.')));
+		else
+			die(json_encode(array('flag'=>0,'message'=>'DB operation failed.')));
+	}
+	
+	public function add_role($params)
+	{
+		if(!isset($params["user_select_feature"]))
+			die(json_encode(array('flag'=>0,'message'=>'No Feature selected')));
+		$data=array();
+		$role=$this->Role_model->get_by_name($params["name"]);
+		if($role)
+			die(json_encode(array('flag'=>0,'message'=>'Role already exists')));
+		$data=array("name"=>$params["name"],"datetime"=>date('Y-m-d H:i:s'));
+		$this->db->trans_start();
+		$role_id=$this->Role_model->add_role(array('name'=>$params["name"]));
+		if($role_id)
+		{
+			$permissions_levels=$this->Permissions_model->get_permission_level();
+			if(!$permissions_levels)
+				$permissions_levels=array();
+			//by default read perm enable for each selected feature
+			$read_level=$this->Permissions_model->get_permission_level_by_name("Read");
+
+			if(isset($params["user_select_feature"]) && !empty($params["user_select_feature"]))
+			{
+				foreach ($params["user_select_feature"] as $feature) {
+					$key='perm_level_'.$feature;
+					if($read_level)
+					{
+						$data=array('feature_id'=>$feature,'role_id'=>$role_id,'permission_level'=>$read_level->id);
+						$this->Permissions_model->add_permission($data);
+					}
+					
+					foreach ($permissions_levels as $level) {
+						if($level->name!="Read" && isset($params[$key]) && in_array($level->id,$params[$key]))
+						{
+							$data=array('feature_id'=>$feature,'role_id'=>$role_id,'permission_level'=>$level->id);
+							$this->Permissions_model->add_permission($data);
+						}
+					
+					}
+					
+				}
+			}
+		}
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Role created Successfully', 'url'=>'Role/view')));
+			
+		}
+	}
+	public function edit_role($params)
+	{
+		if(!isset($params["user_select_feature"]))
+			die(json_encode(array('flag'=>0,'message'=>'No Feature selected')));
+		$data=array();
+		$role=$this->Role_model->get_by_name($params["name"]);
+		if($role && $role->id!=$params["id"])
+			die(json_encode(array('flag'=>0,'message'=>'Role already exists')));
+		$data=array("name"=>$params["name"]);
+		$this->db->trans_start();
+		$this->Role_model->edit_role(array('name'=>$params["name"]),$params["id"]);
+		$this->Permissions_model->delete_extra_features_permissions_by_role_id($params["id"],$params["user_select_feature"]);
+		$role_permissions=$this->Permissions_model->getrolepermissions($params['id']);
+		if(!$role_permissions)
+			$role_permissions=array();
+		$permissions_levels=$this->Permissions_model->get_permission_level();
+		if(!$permissions_levels)
+			$permissions_levels=array();
+
+		foreach ($params["user_select_feature"] as $row) {
+			$key='perm_level_'.$row;
+			if(!CHECK_PERMISSION_CUSTOM($role_permissions,$row))
+			{
+				$read_level=$this->Permissions_model->get_permission_level_by_name("Read");
+				$data=array('feature_id'=>$row,'role_id'=>$params["id"],'permission_level'=>$read_level->id);
+				$this->Permissions_model->add_permission($data);
+				$role_permissions=$this->Permissions_model->getrolepermissions($params['id']);
+				if(!$role_permissions)
+					$role_permissions=array();
+			}
+			foreach ($permissions_levels as $level) {
+				if($level->name!="Read" && !CHECK_PERMISSION_CUSTOM($role_permissions,$row,$level->id) && isset($params[$key]) && in_array($level->id,$params[$key]))
+				{
+					$data=array('feature_id'=>$row,'role_id'=>$params['id'],'permission_level'=>$level->id);
+					$this->Permissions_model->add_permission($data);
+				}
+				else if($level->name!="Read" && CHECK_PERMISSION_CUSTOM($role_permissions,$row,$level->id) && isset($params[$key]) && !in_array($level->id,$params[$key]))
+				{
+					$this->Permissions_model->delete_permission_by_data(array('role_id'=>$params["id"],"feature_id"=>$row,'permission_level'=>$level->id));
+				}
+				else{}
+			}
+		}
+		
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Changes Successfully', 'url'=>'Role/view')));
+			
+		}
+	}
+	
+	function add_country($params)
+	{
+	
+		$country = $this->Country_model->check_country($params['country']);
+		if ($country) {
+			die(json_encode(array('flag'=>0,'message'=>'Country already exists')));
+		}
+		$data = array();
+		$profile_picture = '';
+		if(!empty($_FILES) && !empty( $_FILES['profile_picture']['name'] ) && $_FILES['profile_picture']['error']!=1)
+		{
+            $extension = pathinfo($_FILES['profile_picture']['name'], PATHINFO_EXTENSION);
+            $profile_picture = 'cmp'.uniqid().'.'.$extension;
+            $file = COUNTRY_IMAGE_PATH_NORMAL.$profile_picture;
+            if(!move_uploaded_file($_FILES['profile_picture']['tmp_name'], $file))
+            	die(json_encode(array('flag'=>0,'message'=>'Error in Image uploading')));
+		    $data['picture'] = $profile_picture;
+		}
+		
+		$data['name'] = $params['country'];
+		
+		$result=$this->Country_model->add_country($data);
+		if($result)
+			die(json_encode(array('flag'=>1, 'message'=>'Information saved Successfully.', 'url'=>'Country/view')));
+		else
+			die(json_encode(array('flag'=>0, 'message'=>'DB operation failed')));
+	}
+	function edit_country($params)
+	{
+		$id = $params['id'];
+		$data = array();
+		$profile_picture = '';
+		if(!empty($_FILES) && !empty( $_FILES['profile_picture']['name'] ) )
+		{            
+            $extension = pathinfo($_FILES['profile_picture']['name'], PATHINFO_EXTENSION);
+            $profile_picture = 'user_'.uniqid().'.'.$extension;
+            $file = COUNTRY_IMAGE_PATH_NORMAL.$profile_picture;
+            if(!move_uploaded_file($_FILES['profile_picture']['tmp_name'], $file))
+            	die(json_encode(array('flag'=>0,'message'=>'Error in Image uploading')));
+		    $data['picture'] = $profile_picture;
+		}
+		if(isset($params['country']) && $params['country']!='')
+			$data['name'] = $params['country'];
+		if(isset($params['company_name']) && $params['company_name']!='')
+			$data['company_name'] = $params['select_company'];
+		$result = $this->Country_model->update_country($data , $id);
+		if($result)
+		{
+			
+			die(json_encode(array('flag'=>1,'message'=>'Record updated Successfully.', 'url'=>'Country/view')));
+		}
+		else
+			die(json_encode(array('flag'=>0,'message'=>'DB operation failed.')));
+
+	}
+	function edit_users($params)
+	{
+		$id = $params['id'];
+		$current_locations = $this->Location_model->get_users_location_byid($id);
+		$data = array();
+		$profile_picture = '';
+		if(!empty($_FILES) && !empty( $_FILES['profile_picture']['name'] ) )
+		{            
+            $extension = pathinfo($_FILES['profile_picture']['name'], PATHINFO_EXTENSION);
+            $profile_picture = 'user_'.uniqid().'.'.$extension;
+            $file = USER_IMAGE_PATH_NORMAL.$profile_picture;
+            if(!move_uploaded_file($_FILES['profile_picture']['tmp_name'], $file))
+            	die(json_encode(array('flag'=>0,'message'=>'Error in Image uploading')));
+		    $data['picture'] = $profile_picture;
+		}
+		if(isset($params['first_name']) && $params['first_name']!='')
+			$data['name'] = $params['first_name'];
+		if(isset($params['last_name']) && $params['last_name']!='')
+			$data['last_name'] = $params['last_name'];
+		if(isset($params['email']) && $params['email']!='')
+			$data['email'] = $params['email'];
+		if(isset($params['role']) && $params['role']!='')
+			$data['role_id'] = $params['role'];
+		if(isset($params['midle_name']) && $params['midle_name']!='')
+			$data['middle_name'] = $params['midle_name'];
+		if(isset($params['badge_no']) && $params['badge_no']!='')
+			$data['badge_number'] = $params['badge_no'];
+		if(isset($params['reset_password']) && $params['reset_password']!='')
+			$data['password'] = $params['reset_password'];
+		$res = $this->User_model->update_users($data , $id);	
+		if ($res) {
+			if(isset($params['attach_location']) && $params['attach_location']!= '')
+			{
+				$new_loc = $params['attach_location'];
+				$loc_str = implode(',', $new_loc);
+				$params['attach_location'] = explode(',' , $loc_str);
+				foreach ($current_locations as $loc) {
+					$re = $this->Location_model->delete_user_location($id);
+				}
+				foreach($params['attach_location'] as $location_id)
+				{
+					$dat=array('location_id'=>$location_id , 'user_id'=>$id , 'datetime' => date('Y-m-d H:i:s'));
+					$result = $this->User_model->add_attach_user_location($dat);
+				}	
+			}
+			die(json_encode(array('flag'=>1,'message'=>'Information updated Successfully.', 'url'=>'User/view')));
+		}
+		else
+			die(json_encode(array('flag'=>0,'message'=>'DB operation failed.')));
+	}
+	function delete_country($params)
+	{
+		$result = $this->Country_model->delete_country($params['pk']);
+		if($result)
+			die(json_encode(array('flag'=>1,'message'=>'Record Deleted Successfully.')));
+		else
+			die(json_encode(array('flag'=>0,'message'=>'Record Not Deleted.')));
+	}
+	function delete_user($params)
+	{
+		$result = $this->User_model->delete_users($params['pk']);
+		if($result)
+			die(json_encode(array('flag'=>1,'message'=>'Record Deleted Successfully.')));
+		else
+			die(json_encode(array('flag'=>0,'message'=>'Record Not Deleted.')));
+	}
+	function add_division($params)
+	{
+		$data = array();
+		$data['name'] = $params['name'];
+		$data['company_id'] = $params['company_id'];
+		$data['datetime'] = date('Y-m-d H:i:s');
+		$result = $this->Division_model->add_division($data);
+		if ($result) {
+			die(json_encode(array('flag' => 1, 'message' => 'Information saved Successfully.', 'url'=>'Division/view' )));
+		}
+		else{
+			die(json_encode(array('flag' => 0 , 'message' => 'Sorry not inserted')));
+		}
+	}
+	function edit_division($params)
+	{
+		$id = $params['id'];
+		$data = array();
+		$data['name'] = $params['name'];
+		$data['company_id']  = $params['company_id'];
+		$result = $this->Division_model->update_divsion($data , $id);
+		if ($result) {
+			die(json_encode(array('flag'=>1 , 'message' => 'Record updated Successfully.' )));
+		}
+		else
+		{
+			die(json_encode(array('flag'=> 0 , 'message' => 'Record updated')));
+		}
+
+	}
+	function delete_division($params)
+	{
+		$result = $this->Division_model->delete_division($params['pk']);
+		if ($result) {
+			die(json_encode(array('flag'=>1 , 'message' => 'Record Deleted Successfully.' )));
+		}
+		else
+		{
+			die(json_encode(array('flag' => 0 , 'message' => 'Record Not Deleted')));
+		}
+	}
+	function add_location($params){
+
+		$data = array();
+		$data['name'] = $params['location'];
+		$data['datetime'] = date('Y-m-d H:i:s');
+		$this->db->trans_start();
+		$location_id = $this->Location_model->add_location($data);
+		if($location_id)
+		{
+			foreach ($params['division_id'] as $division_id) {
+				$data=array('location_id'=>$location_id,'division_id'=>$division_id);
+				$this->Division_model->add_location_division($data);
+			}
+		}
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Location created Successfully', 'url'=>'Location/view')));
+			
+		}
+		
+	}
+
+	function add_manufacturer($params)
+	{
+		$data = array();
+		$data['name'] = $params['name'];
+		$data['email'] = $params['email'];
+		$data['phone'] = $params['phone'];
+		$data['address'] = $params['address'];
+		$data['datetime'] = date('Y-m-d H:i:s');
+		$result = $this->Manufacturer_model->add_manufacturer($data);
+		if ($result) {
+			die(json_encode(array('flag' => 1, 'message' => 'Information saved Successfully.' , 'url'=>'Manufacturer/view')));
+		}
+		else{
+			die(json_encode(array('flag' => 0 , 'message' => 'Sorry not inserted')));
+		}
+	}
+	function delete_manufacturer($params)
+	{
+		$result = $this->Manufacturer_model->delete_manufacturers($params['pk']);
+		if ($result) {
+			die(json_encode(array('flag'=>1 , 'message' => 'Record Deleted Successfully.' )));
+		}
+		else
+		{
+			die(json_encode(array('flag' => 0 , 'message' => 'Record Not Deleted')));
+		}
+	}
+	function edit_location($params){
+
+		
+		$this->db->trans_start();
+		$this->Location_model->update_location(array('name'=>$params["location"]),$params["id"]);
+		$this->Division_model->delete_extra_location_divisions_by_location_id($params["id"],$params["division_id"]);
+		$location_divisions=$this->Division_model->get_divisions_by_location_id($params['id']);
+		if(!$location_divisions)
+			$location_divisions=array();
+		$location_divisions=array_column($location_divisions,'division_id');
+		foreach ($params['division_id'] as $division_id) {
+			if(!in_array($division_id,$location_divisions))
+			{
+				$data=array('location_id'=>$params['id'],'division_id'=>$division_id);
+				$this->Division_model->add_location_division($data);
+			}
+				
+		}
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'changes Successfully', 'url'=>'Location/view')));
+			
+		}
+		
+		
+	}
+	function add_company($params)
+	{
+		$data = array();
+		$data['name'] = $params['name'];
+		$data['country_id'] = $params['country_id'];
+		$data['datetime'] = date('Y-m-d H:i:s');
+		$result = $this->Company_model->add_company($data);
+		if ($result) {
+			die(json_encode(array('flag' => 1, 'message' => 'Information saved Successfully.', 'url'=>'Company/view' )));
+		}
+		else{
+			die(json_encode(array('flag' => 0 , 'message' => 'Sorry not inserted')));
+		}
+	}
+	function edit_company($params)
+	{
+		$id = $params['id'];
+		$data = array();
+		$data['name'] = $params['name'];
+		$data['country_id']  = $params['country_id'];
+		$result = $this->Company_model->update_company($data , $id);
+		if ($result) {
+			die(json_encode(array('flag'=>1 , 'message' => 'Record updated Successfully.' , 'url'=>'Company/view')));
+		}
+		else
+		{
+			die(json_encode(array('flag'=> 0 , 'message' => 'Record updated')));
+		}
+
+	}
+	function delete_company($params)
+	{
+		$result = $this->Company_model->delete_company($params['pk']);
+		if ($result) {
+			die(json_encode(array('flag'=>1 , 'message' => 'Record Deleted Successfully.' )));
+		}
+		else
+		{
+			die(json_encode(array('flag' => 0 , 'message' => 'Record Not Deleted')));
+		}
+	}
+	function delete_equipment_type($params)
+	{
+		$result = $this->Equipment_model->delete_equipment_type($params['pk']);
+		if ($result) {
+			die(json_encode(array('flag'=>1 , 'message' => 'Record Deleted Successfully.' )));
+		}
+		else
+		{
+			die(json_encode(array('flag' => 0 , 'message' => 'Record Not Deleted')));
+		}
+	}
+	function delete_equipment($params)
+	{
+		$result = $this->Equipment_model->delete_equipment($params['pk']);
+		if ($result) {
+			die(json_encode(array('flag'=>1 , 'message' => 'Record Deleted Successfully.' )));
+		}
+		else
+		{
+			die(json_encode(array('flag' => 0 , 'message' => 'Record Not Deleted')));
+		}
+	}
+	function delete_certificate_type($params)
+	{
+		$result = $this->Certificate_model->delete_certificate_type($params['pk']);
+		if ($result) {
+			die(json_encode(array('flag'=>1 , 'message' => 'Record Deleted Successfully.' )));
+		}
+		else
+		{
+			die(json_encode(array('flag' => 0 , 'message' => 'Record Not Deleted')));
+		}
+	}
+	function delete_location($params)
+	{
+		$result = $this->Location_model->delete_location($params['pk']);
+		if ($result) {
+			die(json_encode(array('flag'=>1 , 'message' => 'Record Deleted Successfully.' )));
+		}
+		else
+		{
+			die(json_encode(array('flag' => 0 , 'message' => 'Record Not Deleted')));
+		}
+	}
+	function delete_role($params)
+	{
+		$result = $this->Role_model->delete_role($params['pk']);
+		if ($result) {
+			die(json_encode(array('flag'=>1 , 'message' => 'Record Deleted Successfully.' )));
+		}
+		else
+		{
+			die(json_encode(array('flag' => 0 , 'message' => 'Record Not Deleted')));
+		}
+	}
+	function update_setting($params)
+	{
+		$user_id = GET_USER_ID();
+		$this->db->trans_start();
+		if(isset($params['x_value']) && $params['x_value']!='')
+		{
+			$data['value'] = $params['x_value'];
+			$this->Setting_model->update_x_value($data);
+		}
+		if(isset($params['y_value']) && $params['y_value']!='')
+		{
+			$data=array('value'=>$params['y_value']); 
+			 $this->Setting_model->update_y_value($data);
+		}
+		if(isset($params['default_location']) && $params['default_location']!='')
+		{
+			$data=array('default_location'=>$params['default_location']); 
+			$this->User_model->update_user($data,$user_id);
+			$this->session->set_userdata(array('default_location'   => $params['default_location'] ));
+		}
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Changes Saved Successfully')));
+			
+		}
+	}
+	function add_certification_type($params){
+		
+		$data = array('name'=>$params["name"],'validity_days'=>$params["validity_days"],
+			'standard'=>$params["standard"]);
+		
+		$data['datetime'] = date('Y-m-d H:i:s');
+		$this->db->trans_start();
+		$certification_id = $this->Certificate_model->add_certification_type($data);
+		if($certification_id)
+		{
+			foreach ($params['inspectioncompaniesinput'] as $cmp) {
+				$data=array('certification_type_id'=>$certification_id,'name'=>$cmp);
+				$this->Certificate_model->add_inspection_company($data);
+			}
+		}
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Certification Type created Successfully', 'url'=>'Certificate/Type/view')));
+			
+		}
+		
+		
+	}
+	function edit_certification_type($params){
+		
+		$data = array('name'=>$params["name"],'validity_days'=>$params["validity_days"],
+			'standard'=>$params["standard"]);
+		
+		$this->db->trans_start();
+		$certification_id = $this->Certificate_model->edit_certification_type($data,$params["id"]);
+		if($certification_id)
+		{
+			$this->Certificate_model->delete_extra_companies($params['inspectioncompaniesinput'],$params["id"]);
+			$companies=$this->Certificate_model->get_inspection_companies_by_certification_type_id($params["id"],$array=1);
+			$companies=array_column($companies,'name');
+			foreach ($params['inspectioncompaniesinput'] as $cmp) {
+				if(!in_array($cmp,$companies))
+				{
+					$data=array('certification_type_id'=>$params["id"],'name'=>$cmp);
+					$this->Certificate_model->add_inspection_company($data);
+				}
+					
+			}
+		}
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Changes saved Successfully', 'url'=>'Certificate/Type/view')));
+			
+		}
+		
+		
+	}
+	function add_equipment_type($params){
+		
+		
+		$data = array('category'=>$params["category"],'name'=>$params["name"]
+			);
+		
+		$data['datetime'] = date('Y-m-d H:i:s');
+		$this->db->trans_start();
+		$equipment_type_id = $this->Equipment_model->add_equipment_type($data);
+		if($equipment_type_id)
+		{
+			foreach ($params['groups'] as $cmp) {
+				$data=array('equipment_type_id'=>$equipment_type_id,'name'=>$cmp);
+				$this->Equipment_model->add_equipment_type_group($data);
+			}
+			foreach ($params['families'] as $cmp) {
+				$data=array('equipment_type_id'=>$equipment_type_id,'name'=>$cmp);
+				$this->Equipment_model->add_equipment_type_family($data);
+			}
+			foreach ($params['subfamilies'] as $cmp) {
+				$data=array('equipment_type_id'=>$equipment_type_id,'name'=>$cmp);
+				$this->Equipment_model->add_equipment_type_subfamily($data);
+			}
+			foreach ($params["select_certification_types"] as $id) {
+				$data=array('equipment_type_id'=>$equipment_type_id,'certification_type_id'=>$id);
+				$this->Equipment_model->add_equipment_type_certification($data);
+			}
+			if(isset($params["editTexts"]) && count($params["editTexts"])>0)
+			{
+				foreach ($params["editTexts"] as $editTexts) {
+					$json_data=json_decode($editTexts);
+					$data=array('equipment_type_id'=>$equipment_type_id,'type'=>'editTexts','text'=>$json_data->question_text);
+					$this->Equipment_model->add_equipment_type_input($data);
+				}
+
+			}
+			if(isset($params["editTextAreas"]) && count($params["editTextAreas"])>0)
+			{
+				foreach ($params["editTextAreas"] as $editTextAreas) {
+					$json_data=json_decode($editTextAreas);
+					$data=array('equipment_type_id'=>$equipment_type_id,'type'=>'editTextAreas','text'=>$json_data->question_text);
+					$this->Equipment_model->add_equipment_type_input($data);
+				}
+
+			}
+			if(isset($params["dates"]) && count($params["dates"])>0)
+			{
+				foreach ($params["dates"] as $dates) {
+					$json_data=json_decode($dates);
+					$data=array('equipment_type_id'=>$equipment_type_id,'type'=>'dates','text'=>$json_data->question_text);
+					$this->Equipment_model->add_equipment_type_input($data);
+				}
+
+			}
+			
+			if(isset($params["spinners"]) && count($params["spinners"])>0)
+			{
+				foreach ($params["spinners"] as $spinners) {
+					$json_data=json_decode($spinners);
+					$data=array('equipment_type_id'=>$equipment_type_id,'type'=>'spinners','text'=>$json_data->question_text);
+					$equipment_type_input_id=$this->Equipment_model->add_equipment_type_input($data);
+					foreach ($json_data->options as $opt) {
+						$data=array('equipment_type_input_id'=>$equipment_type_input_id,'text'=>$opt);
+						$this->Equipment_model->add_equipment_type_input_option($data);
+					}
+					
+				}
+
+			}
+			if(isset($params["checkboxs"]) && count($params["checkboxs"])>0)
+			{
+				foreach ($params["checkboxs"] as $checkboxs) {
+					$json_data=json_decode($checkboxs);
+					$data=array('equipment_type_id'=>$equipment_type_id,'type'=>'checkboxs','text'=>$json_data->question_text);
+					$equipment_type_input_id=$this->Equipment_model->add_equipment_type_input($data);
+					foreach ($json_data->options as $opt) {
+						$data=array('equipment_type_input_id'=>$equipment_type_input_id,'text'=>$opt);
+						$this->Equipment_model->add_equipment_type_input_option($data);
+					}
+					
+				}
+
+			}
+				
+		}
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Equipment Type created Successfully','url'=>'Equipment/Type/view')));
+			
+		}
+		
+		
+	}
+	function edit_equipment_type($params){
+		/*print_r($params);
+		die();*/
+		$equipment_type_id=$params["id"];
+		$data = array('category'=>$params["category"],'name'=>$params["name"]
+			);
+		
+		$this->db->trans_start();
+		$this->Equipment_model->edit_equipment_type($data,$equipment_type_id);
+
+		$this->Equipment_model->delete_extra_groups($params['groups'],$equipment_type_id);
+		$groups=$this->Equipment_model->get_groups_by_equipment_type_id($equipment_type_id,$array=1);
+		$groups=array_column($groups,'name');
+		foreach ($params['groups'] as $row) {
+			if(!in_array($row,$groups))
+			{
+				$data=array('equipment_type_id'=>$equipment_type_id,'name'=>$row);
+				$this->Equipment_model->add_equipment_type_group($data);
+			}
+				
+		}
+
+		$this->Equipment_model->delete_extra_families($params['families'],$equipment_type_id);
+		$families=$this->Equipment_model->get_families_by_equipment_type_id($equipment_type_id,$array=1);
+		$families=array_column($families,'name');
+		foreach ($params['families'] as $row) {
+			if(!in_array($row,$families))
+			{
+				$data=array('equipment_type_id'=>$equipment_type_id,'name'=>$row);
+				$this->Equipment_model->add_equipment_type_family($data);
+			}
+				
+		}
+
+		
+		$this->Equipment_model->delete_extra_subfamilies($params['subfamilies'],$equipment_type_id);
+		$subfamilies=$this->Equipment_model->get_subfamilies_by_equipment_type_id($equipment_type_id,$array=1);
+		$subfamilies=array_column($subfamilies,'name');
+		foreach ($params['subfamilies'] as $row) {
+			if(!in_array($row,$subfamilies))
+			{
+				$data=array('equipment_type_id'=>$equipment_type_id,'name'=>$row);
+				$this->Equipment_model->add_equipment_type_subfamily($data);
+			}
+				
+		}
+
+		$this->Equipment_model->delete_extra_equipment_type_certification($params['select_certification_types'],$equipment_type_id);
+		$certification_types=$this->Equipment_model->get_equipment_type_certifications_by_equipment_type_id($equipment_type_id,$array=1);
+		$certification_types=array_column($certification_types,'id');
+		foreach ($params['select_certification_types'] as $row) {
+			if(!in_array($row,$certification_types))
+			{
+				$data=array('equipment_type_id'=>$equipment_type_id,'certification_type_id'=>$row);
+				$this->Equipment_model->add_equipment_type_certification($data);
+			}
+				
+		}
+		
+		
+		if(isset($params["editTexts"]) && count($params["editTexts"])>0)
+		{
+			$input_ids=array();
+			foreach ($params["editTexts"] as $editTexts) {
+				$json_data=json_decode($editTexts);
+				if(!property_exists($json_data, 'id'))
+				{
+					$data=array('equipment_type_id'=>$equipment_type_id,'type'=>'editTexts','text'=>$json_data->question_text);
+					$id=$this->Equipment_model->add_equipment_type_input($data);
+					array_push($input_ids, $id);
+				}
+				else
+					array_push($input_ids, $json_data->id);
+					
+			}
+			$this->Equipment_model->delete_extra_equipment_type_inputs($input_ids,$equipment_type_id,'editTexts');
+
+		}
+		if(isset($params["editTextAreas"]) && count($params["editTextAreas"])>0)
+		{
+			$input_ids=array();
+			foreach ($params["editTextAreas"] as $editTextAreas) {
+				$json_data=json_decode($editTextAreas);
+				if(!property_exists($json_data, 'id'))
+				{
+					$data=array('equipment_type_id'=>$equipment_type_id,'type'=>'editTextAreas','text'=>$json_data->question_text);
+					$id=$this->Equipment_model->add_equipment_type_input($data);
+					array_push($input_ids, $id);
+				}
+				else
+					array_push($input_ids, $json_data->id);
+					
+			}
+			$this->Equipment_model->delete_extra_equipment_type_inputs($input_ids,$equipment_type_id,'editTextAreas');
+		}
+		if(isset($params["dates"]) && count($params["dates"])>0)
+		{
+			$input_ids=array();
+			foreach ($params["dates"] as $dates) {
+				$json_data=json_decode($dates);
+				if(!property_exists($json_data, 'id'))
+				{
+					$data=array('equipment_type_id'=>$equipment_type_id,'type'=>'dates','text'=>$json_data->question_text);
+					$id=$this->Equipment_model->add_equipment_type_input($data);
+					array_push($input_ids, $id);
+				}
+				else
+					array_push($input_ids, $json_data->id);
+					
+			}
+			$this->Equipment_model->delete_extra_equipment_type_inputs($input_ids,$equipment_type_id,'dates');
+		}
+		
+		if(isset($params["spinners"]) && count($params["spinners"])>0)
+		{
+			$input_ids=array();
+			foreach ($params["spinners"] as $spinners) {
+				$json_data=json_decode($spinners);
+
+				if(!property_exists($json_data, 'id'))
+				{
+					$data=array('equipment_type_id'=>$equipment_type_id,'type'=>'spinners','text'=>$json_data->question_text);
+					$equipment_type_input_id=$this->Equipment_model->add_equipment_type_input($data);
+					foreach ($json_data->options as $opt) {
+						$data=array('equipment_type_input_id'=>$equipment_type_input_id,'text'=>$opt);
+						$this->Equipment_model->add_equipment_type_input_option($data);
+					}
+					array_push($input_ids, $equipment_type_input_id);
+				}
+				else
+					array_push($input_ids, $json_data->id);
+					
+				
+			}
+			$this->Equipment_model->delete_extra_equipment_type_inputs($input_ids,$equipment_type_id,'spinners');
+		}
+		if(isset($params["checkboxs"]) && count($params["checkboxs"])>0)
+		{
+			$input_ids=array();
+			foreach ($params["checkboxs"] as $checkboxs) {
+				$json_data=json_decode($checkboxs);
+				if(!property_exists($json_data, 'id'))
+				{
+					$data=array('equipment_type_id'=>$equipment_type_id,'type'=>'checkboxs','text'=>$json_data->question_text);
+					$equipment_type_input_id=$this->Equipment_model->add_equipment_type_input($data);
+					foreach ($json_data->options as $opt) {
+						$data=array('equipment_type_input_id'=>$equipment_type_input_id,'text'=>$opt);
+						$this->Equipment_model->add_equipment_type_input_option($data);
+					}
+					array_push($input_ids, $equipment_type_input_id);
+				}
+				else
+					array_push($input_ids, $json_data->id);
+					
+				
+			}
+			$this->Equipment_model->delete_extra_equipment_type_inputs($input_ids,$equipment_type_id,'checkboxs');
+		}
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Changes saved Successfully', 'url'=>'Equipment/Type/view')));
+			
+		}
+		
+		
+	}
+	function get_equipment_type_categories()
+	{
+		$categories=$this->Equipment_model->get_equipment_type_categories_keypairs();
+		if(!$categories)
+			$categories=array();
+		$result=array();
+		foreach ($categories as $row) {
+			$obj=new stdClass();
+			$obj->team=$row->category;
+			array_push($result,$obj);
+		}
+		echo json_encode($result);
+		die();
+	}
+	
+	function get_parent_equipments($params)
+	{
+
+		$default_location=$this->session->userdata["default_location"];
+		
+		$all_rec = $this->Equipment_model->get_equipments_within_locations($default_location,$params,1);
+		if(!$all_rec)
+			$all_rec=array();
+		$totalRec=count($all_rec);
+		$equipments  = $this->Equipment_model->get_equipments_within_locations($default_location,$params);
+		if(!$equipments)
+			$equipments=array();
+		$recordsFiltered=count($equipments);
+		$result=array();
+
+		foreach ($equipments as $row) {
+			$single=array($row->name
+				, '<span class="pull-right btn btn-xs btn-default check-equipment-parent-btn" data-id="'.$row->id.'" data-name="'.$row->name.'">
+                            <span class="fa fa-plus" aria-hidden="true"></span>
+                        </span>'
+
+                  );
+			array_push($result,$single);
+		}
+		$output = array(
+	        "draw" => $params["draw"],
+	        "recordsTotal" => $totalRec ,//count($location),
+	        "recordsFiltered" =>$totalRec, //count($location),
+	        "data" => $result
+	    );
+		echo  json_encode($output);
+
+		die();
+	}
+
+	public function get_equipment_type_specific_data()
+	{
+		$params=$this->input->post();
+		if (isset($params['action_type'])  && $params['action_type']!='') {
+			$this->get_equipment_type_specific_data_edit($params);
+		}
+		$equipment_type_id=$params["id"];
+		$type=$this->Equipment_model->get_equipment_type_by_id($equipment_type_id);
+		if ($type) 
+		{
+			$data["type"]=$type;
+			$certificates=$this->Equipment_model->get_equipment_type_certifications_by_equipment_type_id($equipment_type_id);
+			if(!$certificates)
+				$certificates=array();
+			if(isset($params["getCertificationTypeOnly"]) && $params["getCertificationTypeOnly"]==1)
+			{
+				$data["certificates"]=$certificates;
+			}
+			else
+			{
+				foreach ($certificates as $row) {
+					$companies=$this->Certificate_model->get_inspection_companies_by_certification_type_id($row->id);
+					if(!$companies)
+						$companies=array();
+					$row->companies=$companies;
+				}
+				$data["certificates"]=$certificates;
+				$groups=$this->Equipment_model->get_groups_by_equipment_type_id($equipment_type_id);
+				if(!$groups)
+					$groups=array();
+				$data["groups"]=$groups;
+				$families=$this->Equipment_model->get_families_by_equipment_type_id($equipment_type_id);
+				if(!$families)
+					$families=array();
+				$data["families"]=$families;
+				$subfamilies=$this->Equipment_model->get_subfamilies_by_equipment_type_id($equipment_type_id);
+				if(!$subfamilies)
+					$subfamilies=array();
+				$data["subfamilies"]=$subfamilies;
+
+				$inputs=$this->Equipment_model->get_equipment_type_input($equipment_type_id);
+				if(!$inputs)
+					$inputs=array();
+				$i=0;
+				foreach ($inputs as $row) {
+					$options=$this->Equipment_model->get_equipment_type_input_option($row->id);
+					if(!$options)
+						$options = array();
+					$inputs[$i]->options=$options;
+					$i++;
+				}
+				
+				$data["inputs"]=$inputs;
+				
+			}
+
+			//$data["inputs"]=$inputs;
+			echo json_encode(array('status'=>1,'data'=>$data));
+			die();
+		}
+		else
+			echo json_encode(array('status'=>0,'message'=>'invalid id'));
+			die();
+	}
+	public function equipment_specification()
+	{
+		$params=$this->input->post();
+		$equipment_id=$params["id"];
+
+		$equipment = $this->Equipment_model->get_equipment_by_id($equipment_id);
+		$equipment_type_id = $equipment->equipment_type_id;
+		$type=$this->Equipment_model->get_equipment_type_by_id($equipment_type_id);
+
+		if ($type) 
+		{
+			$data["type"]=$type;
+			$certificates=$this->Equipment_model->get_equipment_type_certifications_by_equipment_type_id($equipment_type_id);
+			if(!$certificates)
+				$certificates=array();
+			$i=0;
+			foreach ($certificates as $row) {
+				$cert=$this->Equipment_model->get_attached_certification_detail_by_certification_id_and_equipment_id($row->id,$equipment_id);
+
+				if($cert)
+				{
+					$certificates[$i]->certificate_number=$cert->certificate_number;
+					$certificates[$i]->document_id=$cert->document_id;
+					$certificates[$i]->document_name=$cert->document_name_simple;
+					$certificates[$i]->expiry_date=$cert->expiry_date_formatted;
+					$certificates[$i]->installation_date=$cert->installation_date_formatted;
+
+				}
+				$companies=$this->Certificate_model->get_inspection_companies_by_certification_type_id($row->id);
+				if(!$companies)
+					$companies=array();
+
+				$row->companies=$companies;
+				$i++;
+			}
+			$data["certificates"]=$certificates;
+			$groups=$this->Equipment_model->get_groups_by_equipment_type_id($equipment_type_id);
+			if(!$groups)
+				$groups=array();
+			$data["groups"]=$groups;
+			$families=$this->Equipment_model->get_families_by_equipment_type_id($equipment_type_id);
+			if(!$families)
+				$families=array();
+			$data["families"]=$families;
+			$subfamilies=$this->Equipment_model->get_subfamilies_by_equipment_type_id($equipment_type_id);
+			if(!$subfamilies)
+				$subfamilies=array();
+			$data["subfamilies"]=$subfamilies;
+
+			$inputs=$this->Equipment_model->get_equipment_type_input($equipment_type_id);
+
+			if(!$inputs)
+				$inputs=array();
+			$i=0;
+			foreach ($inputs as $row) {
+				$options=$this->Equipment_model->get_equipment_type_input_option($row->id);
+				if(!$options)
+					$options = array();
+				$inputs[$i]->options=$options;
+				
+				$answer_ar=$this->Equipment_model->get_equipment_type_input_answer(array('input_id'=>$row->id,'equipment_id'=>$equipment_id));
+
+				if($answer_ar && count($answer_ar)>0)
+				{
+					if(in_array($row->type,array('spinners','checkboxs')))
+					{
+						$answer=array();
+						foreach ($answer_ar as $ans) {
+							$option=$this->Equipment_model->get_option_by_id($ans->answer);
+							if($option)
+								array_push($answer,$option->text);
+
+						}
+						$answer=implode(',',$answer);
+					}
+					else
+						$answer=$answer_ar[0]->answer;
+				}
+				else
+					$answer="";
+				$inputs[$i]->answer=$answer;
+				$i++;
+			}
+
+			/*foreach ($inputs as $row) {
+				$options=$this->Equipment_model->get_equipment_type_input_option($row->id);
+				if(!$options)
+					$options = array();
+				$inputs[$i]->options=$options;
+				$i++;
+			}*/
+			$data["inputs"]=$inputs;
+
+			echo json_encode(array('status'=>1,'data'=>$data));
+				die();
+				
+		}
+		else
+			echo json_encode(array('status'=>0,'message'=>'invalid id'));
+			die();
+	}
+
+	public function validateUniqueSerialNumber()
+	{
+		$params=$this->input->post();
+		if(!isset($params["serialnumber"]))
+			die('true');
+		$serialnumber=$params["serialnumber"];
+		$equipment=$this->Equipment_model->get_by_serialnumber($serialnumber);
+		if($equipment && (!isset($params["equipment_id"]) || $equipment->id!=$params["equipment_id"]) )
+			die('false');
+		else
+			die('true');
+	}
+	function add_equipment($params){
+		$data = array('name'=>$params["name"],
+			'serial_number'=>$params["serialnumber"],'manufacturer_id'=>$params["select_manufacturer"],
+			'equipment_type_id'=>$params["select_equipment_types"],
+			'equipment_group'=>$params["equipment_group"],"equipment_family"=>$params["equipment_family"],
+			'equipment_subfamily'=>$params["equipment_subfamily"],
+			'datetime'=>date('Y-m-d H:i:s')
+			);
+		$default_location=$this->session->userdata["default_location"];
+		$data["location_id"]=$default_location;
+		if(isset($params['description']))
+			$data['description']=$params['description'];
+		$this->db->trans_start();
+		$equipment_id = $this->Equipment_model->add_equipment($data);
+		if($equipment_id)
+		{
+			$profile_picture = '';
+			if(!empty($_FILES) && !empty( $_FILES['profile_picture']['name'] ) && $_FILES['profile_picture']['error']!=1)
+			{
+	            
+	            $extension = pathinfo($_FILES['profile_picture']['name'], PATHINFO_EXTENSION);
+	            $profile_picture = 'equip_'.uniqid().'.'.$extension;
+	            $file = EQUIPMENT_IMAGE_PATH_NORMAL.$profile_picture;
+	            if(!move_uploaded_file($_FILES['profile_picture']['tmp_name'], $file))
+	            	die(json_encode(array('flag'=>0,'message'=>'Error in Image uploading')));
+			    $this->Equipment_model->edit_equipment(array('picture'=>$profile_picture),$equipment_id);
+			}
+
+			$i=0;
+			foreach ($params["certficate_id"] as $row) {
+				$expiry = DateTime::createFromFormat('m/d/Y',$params["expiry_date"][$i]);
+				$expiry = $expiry->format('Y-m-d');
+				$installation = DateTime::createFromFormat('m/d/Y',$params["installation_date"][$i]);
+				$installation = $installation->format('Y-m-d');
+				$data=array('certificate_number'=>$params['certificate_number'][$i],'equipment_id'=>$equipment_id,'certificate_id'=>$row,'document_id'=>$params["certificate_file_ids"][$i],
+					'installation_date'=>$installation,'expiry_date'=>$expiry,'inspection_company'=>$params["select-inspection-company"][$i]);
+				$this->Equipment_model->add_equipment_certificate($data);
+				$i++;
+			}
+
+			$inputs=$this->Equipment_model->get_equipment_type_input($params["select_equipment_types"]);
+			if(!$inputs)
+				$inputs=array();
+			
+			foreach ($inputs as $row) {
+				$answers=array();
+				$id=$row->type."-".$row->id;
+				if(in_array($row->type,array('editTexts','editTextAreas','dates','spinners')))
+				{
+					if(isset($params[$id]))
+						array_push($answers,$params[$id]);
+				}
+				else{
+					if(isset($params[$id]))
+						$answers=$params[$id];
+				}
+				foreach ($answers as $ans) {
+					$data=array('equipment_id'=>$equipment_id,'input_id'=>$row->id,'answer'=>$ans);
+						$this->Equipment_model->add_equipment_type_input_answer($data);
+					
+				}
+				
+			}
+
+			
+				
+		}
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Equipment created Successfully','url'=>'Equipment/view')));
+			
+		}
+		
+	}
+	function edit_equipment($params){
+		$equipment_id = $params['equipment_id'];
+
+		$equipments = $this->Equipment_model->get_equipment_by_id($equipment_id);
+		$equipment_type_id = $equipments->equipment_type_id;
+		if (isset($params["name"]) && $params["name"]!='') {
+			$data['name'] = $params["name"];
+		}
+		if (isset($params["serialnumber"]) && $params["serialnumber"]!='') {
+			$data['serial_number'] = $params["serialnumber"];
+		}
+		if (isset($params["select_manufacturer"]) && $params["select_manufacturer"]!='') {
+			$data['manufacturer_id'] = $params["select_manufacturer"];
+		}
+		if (isset($params["select_equipment_types"]) && $params["select_equipment_types"]!='') {
+			$data['equipment_type_id'] = $params["select_equipment_types"];
+		}
+		if (isset($params["equipment_group"]) && $params["equipment_group"]!='') {
+			$group = $this->Equipment_model->get_equipment_group_by_id($params["equipment_group"]);
+			$g_name = $group->name;
+			$data['equipment_group'] = $g_name;
+		}
+		if (isset($params["equipment_family"]) && $params["equipment_family"]!='') {
+			$family = $this->Equipment_model->get_equipment_family_by_id($params["equipment_family"]);
+			$f_name = $family->name;
+			$data['equipment_family'] = $f_name;
+		}
+		if (isset($params["equipment_subfamily"]) && $params["equipment_subfamily"]!='') {
+			$sub_family = $this->Equipment_model->get_equipment_sub_family_by_id($params["equipment_subfamily"]);
+			$sub_f_name = $sub_family->name;
+			$data['equipment_subfamily'] = $sub_f_name;
+		}
+		/*if (isset($params["equipment_subfamily"]) && $params["equipment_subfamily"]!='') {
+			$data['equipment_subfamily'] = $params["equipment_subfamily"];
+		}*/
+		if (isset($params["description"]) && $params["description"]!='') {
+			$data['description'] = $params["description"];
+		}
+
+
+		$default_location=$this->session->userdata["default_location"];
+		$data["location_id"]=$default_location;
+		$this->db->trans_start();
+		$equip = $this->Equipment_model->edit_equipment($data,$equipment_id);
+		
+		if($equip)
+		{
+			$profile_picture = '';
+			if(!empty($_FILES) && !empty( $_FILES['profile_picture']['name'] ) && $_FILES['profile_picture']['error']!=1)
+			{
+	            
+	            $extension = pathinfo($_FILES['profile_picture']['name'], PATHINFO_EXTENSION);
+	            $profile_picture = 'equip_'.uniqid().'.'.$extension;
+	            $file = EQUIPMENT_IMAGE_PATH_NORMAL.$profile_picture;
+	            if(!move_uploaded_file($_FILES['profile_picture']['tmp_name'], $file))
+	            	die(json_encode(array('flag'=>0,'message'=>'Error in Image uploading')));
+			    $this->Equipment_model->edit_equipment(array('picture'=>$profile_picture),$equipment_id);
+			}
+			$data = array();
+			$i=0;
+			foreach ($params["certficate_id"] as $row) {
+				$certficate = $this->Equipment_model->get_attached_certification_detail_by_certification_id_and_equipment_id($row, $equipment_id);
+				if ($certficate) {
+						$document_id = $certficate->document_id;
+						$certficate_id = $certficate->id;
+						if ($document_id != $params["certificate_file_id"][$i]) {
+
+					
+							$location_id=$this->session->userdata["default_location"];
+							$user_id=$this->session->userdata["user_login_id"];						
+							$new_document_id = $params["certificate_file_id"][$i];	
+							$dataa = array('equipment_id'=>$equipment_id , 'certificate_id'=>$certficate_id, 'user_id'=>$user_id ,'location_id'=>$location_id , 'datetime'=>date('Y-m-d H:i:s') , 'document_id'=>$document_id,'new_document'=>$new_document_id , 'old_document'=>$document_id);
+							$result = $this->Equipment_model->add_equipment_certification_history($dataa);
+							
+						}
+					}	
+				$expiry = DateTime::createFromFormat('m/d/Y', $params["expiry_date"][$i]);
+				$expiry = $expiry->format('Y-m-d');
+				$installation = DateTime::createFromFormat('m/d/Y',$params["installation_date"][$i]);
+				$installation = $installation->format('Y-m-d');
+
+				if ($certficate) {					
+					$equipment_certficate_id = $certficate->id;
+					if (isset($params["expiry_date"]) && $params['expiry_date'][$i]) {
+					$data['expiry_date'] = $expiry;
+					}
+					if (isset($params["installation_date"]) && $params["installation_date"][$i]) {
+						$data['installation_date'] = $installation;
+					}
+					if (isset($params['certificate_number']) && $params['certificate_number'][$i]) {
+						$data['certificate_number'] = $params['certificate_number'][$i];
+					}
+					/*if (isset($params["certificate_file_ids"]) && $params["certificate_file_id"][$i]) {
+						$data['document_id'] = $params["certificate_file_id"][$i];
+					}*/
+					if (isset($params["select-inspection-company"]) && $params["select-inspection-company"]) {
+						$data['inspection_company'] = $params["select-inspection-company"][$i];
+					}
+					if (isset($params["certificate_file_id"]) && $params["certificate_file_id"]) {
+						$data['document_id'] = $params["certificate_file_id"][$i];
+					}
+
+					$result = $this->Equipment_model->edit_equipment_certificate($data , $equipment_certficate_id);
+				}
+				else
+				{
+					$dat=array('certificate_number'=>$params['certificate_number'][$i],'equipment_id'=>$equipment_id,'certificate_id'=>$row,'document_id'=>$params["certificate_file_ids"][$i],
+					'installation_date'=>$installation,'expiry_date'=>$expiry,'inspection_company'=>$params["select-inspection-company"][$i]);
+					$result = $this->Equipment_model->add_equipment_certificate($dat);
+				}
+
+				/*$data=array('certificate_number'=>$params['certificate_number'][$i],'equipment_id'=>$equipment_id,'certificate_id'=>$row,'document_id'=>$params["certificate_file_ids"][$i],
+					'installation_date'=>$installation,'expiry_date'=>$expiry,'inspection_company'=>$params["select-inspection-company"][$i]);*/
+				
+				$i++;
+			}
+			
+			$inputs=$this->Equipment_model->get_equipment_type_input($params["select_equipment_types"]);
+			if(!$inputs)
+				$inputs=array();
+			foreach ($inputs as $row) {
+				$answers=array();
+				$id=$row->type."-".$row->id;
+				if(in_array($row->type,array('editTexts','editTextAreas','dates','spinners')))
+				{
+					if(isset($params[$id]))
+						array_push($answers,$params[$id]);
+				}
+				else{
+					if(isset($params[$id]))
+						$answers=$params[$id];
+				}
+				foreach ($answers as $ans){
+					$answer_input = $this->Equipment_model->get_answer_input_by_equipment_id_and_input_id($equipment_id , $row->id);
+					if ($answer_input) {
+						$answer_input_id = $answer_input->id;
+						$data=array('answer'=>$ans);
+						$this->Equipment_model->update_equipment_type_input_answer($data , $answer_input_id);
+					}
+					else{
+						$data=array('equipment_id'=>$equipment_id,'input_id'=>$row->id,'answer'=>$ans);
+						$this->Equipment_model->add_equipment_type_input_answer($data);
+					}
+					
+				}
+				
+			}	
+				
+		}
+		$this->db->trans_complete();
+        if ($this->db->trans_status() === FALSE) {
+        	die(json_encode(array('flag'=>0,'message'=>'Operation Failed')));
+        }
+		else
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Equipment update Successfully', 'url'=>'Equipment/view')));
+			
+		}
+		
+	}
+	public function documents($params)
+	{
+		/*if($this->session->userdata['default_location']!=0)
+		{*/
+			$default_location=$this->session->userdata["default_location"];
+			$all_rec = $this->Document_model->get_documents($params, 1, $default_location);
+			if(!$all_rec)
+				$all_rec=array();
+			$totalRec=count($all_rec);
+			$document  = $this->Document_model->get_documents($params,0, $default_location);
+			
+			if(!$document)
+				$document=array();
+			$recordsFiltered=count($document);
+			$result=array();
+			//$deletee = CHECK_PERMISSION(USER,DELETEE);
+			//$updatee= CHECK_PERMISSION(USER,UPDATEE);
+			if (isset($params['assign'])&& $params['assign']==1) {
+				foreach ($document as $row){
+					$single=array($row->id, $row->name,$row->type, $row->datetime,'<td><div class="mask">
+		                      <div class="tools tools-bottom">
+		                      	<a href="#" data-toggle="tooltip" title="Click To attach with equipment" data-placement="bottom" class="link-to-equip btn btn-info btn-xs" data-id="'.$row->id.'" data-name="'.$row->name.'"><i class="fa fa-link"></i></a>
+		                        <a href="'.base_url('Gallery/view_document/'.$row->id).'" target="_blank" class="btn btn-primary btn-xs"><i class="fa fa-eye"> View</i></a>
+		                      </div>
+		                    </div></td>');
+					array_push($result,$single);
+				}
+			}
+			else
+			{
+				foreach ($document as $row){
+					$single=array($row->id, $row->name,$row->type, $row->datetime,'<td><div class="mask">
+		                      <div class="tools tools-bottom">
+		                        <a href="'.base_url('Gallery/view_document/'.$row->id).'" target="_blank" class="btn btn-primary btn-xs"><i class="fa fa-eye"> View</i></a>
+		                      </div>
+		                    </div></td>');
+					array_push($result,$single);
+				}
+			}
+			
+			$output = array(
+		        "draw" => $params["draw"],
+		        "recordsTotal" => $totalRec ,//count($location),
+		        "recordsFiltered" =>$totalRec, //count($location),
+		        "data" => $result
+		    );
+			echo  json_encode($output);
+			die();
+		/*}
+		else
+		{
+
+			$this->session->set_flashdata('message','You must set a default location for operation');
+			redirect('Setting', 'refresh');
+		}*/
+	}
+	public function generate_reports()
+	{
+
+		
+       
+		$params=$this->input->post();
+		if(!isset($params["page"])){
+            $params["start"] = 0;
+        }else{
+            $params["start"] = $this->input->post('page');
+        }
+        $params["role_id"]=GET_USER_ROLE();
+        $params["user_id"]=GET_USER_ID();
+        $x_value=$this->Setting_model->get_x_value()->value;
+        $y_value=$this->Setting_model->get_y_value()->value;
+        //total rows count
+        $totalRec = $this->Equipment_model->get_equipments_total($x_value,$y_value,$params);
+        
+        //pagination configuration
+        $config['target']      = '#main_content_pag';
+        $config['base_url']    = base_url().'Contract/ajaxPaginationData';
+        $config['total_rows']  = $totalRec;
+        $config['per_page']    = $this->perPage;
+
+        $this->ajax_pagination->initialize($config);
+        $params["limit"]=$this->perPage;
+        //get the posts data
+        
+        //load the view
+        $equipments = $this->Equipment_model->get_equipments($x_value,$y_value,$params);
+        
+        foreach ($equipments as $row) {
+        	$reported_certificates=$this->Equipment_model->get_reported_certificates($x_value,$y_value,$row->id);
+        	$row->certificates=$reported_certificates;
+        	if($row->parent_id!=0)
+        	{
+        		$child=$row;
+        		$i=0;
+        		while ( $child->parent_id!=0 ) {
+        			$parent=$this->Equipment_model->get_equipment_by_id($child->parent_id);
+        			$child->parent=$parent;
+        			$child=$child->parent;
+        		}
+        		
+        	}
+        }
+        echo json_encode(array('equipments'=>$equipments,'links'=>$this->ajax_pagination->create_links()));
+        die();
+        
+	}
+	public function export_reports_excel()
+	{
+
+		$params=$this->input->post();
+		$params["getAll"]=1;
+        $params["role_id"]=GET_USER_ROLE();
+        $params["user_id"]=GET_USER_ID();
+        $x_value=$this->Setting_model->get_x_value()->value;
+        $y_value=$this->Setting_model->get_y_value()->value;
+        //total rows count
+        $totalRec = $this->Equipment_model->get_equipments_total($x_value,$y_value,$params);
+        
+       
+        //load the view
+        $equipments = $this->Equipment_model->get_equipments($x_value,$y_value,$params);
+        echo date('H:i:s') . " Create new PHPExcel object\n";
+		$objPHPExcel = new PHPExcel('zahra');
+
+		// Set properties
+		echo date('H:i:s') . " Set properties\n";
+		$objPHPExcel->getProperties()->setCreator("Maarten Balliauw");
+		$objPHPExcel->getProperties()->setLastModifiedBy("Maarten Balliauw");
+		$objPHPExcel->getProperties()->setTitle("Office 2007 XLSX Test Document");
+		$objPHPExcel->getProperties()->setSubject("Office 2007 XLSX Test Document");
+		$objPHPExcel->getProperties()->setDescription("Test document for Office 2007 XLSX, generated using PHP classes.");
+
+		$objPHPExcel->setActiveSheetIndex(0);
+		// Add some data
+		echo date('H:i:s') . " Add some data\n";
+
+		$i=1;
+        foreach ($equipments as $row) {
+        	$reported_certificates=$this->Equipment_model->get_reported_certificates($x_value,$y_value,$row->id);
+        	$row->certificates=$reported_certificates;
+
+        	
+
+        	if($row->parent_id!=0)
+        	{
+        		$child=$row;
+        		$i=0;
+        		while ( $child->parent_id!=0 ) {
+        			$parent=$this->Equipment_model->get_equipment_by_id($child->parent_id);
+        			$child->parent=$parent;
+        			$child=$child->parent;
+        		}
+        		
+        	}
+        	$objPHPExcel->getActiveSheet()->SetCellValue('A'.$i,$row->id );
+			$objPHPExcel->getActiveSheet()->SetCellValue('B'.$i, $row->serial_number);
+			$objPHPExcel->getActiveSheet()->SetCellValue('C'.$i, $row->name);
+			$objPHPExcel->getActiveSheet()->SetCellValue('D'.$i,$row->location_name) ;
+			$objPHPExcel->getActiveSheet()->SetCellValue('E'.$i,$row->manufacturer_name) ;
+			$i++;
+
+        }
+
+
+			// Rename sheet
+			echo date('H:i:s') . " Rename sheet\n";
+			$objPHPExcel->getActiveSheet()->setTitle('Simple');
+
+			// Save Excel 2007 file
+			echo date('H:i:s') . " Write to Excel2007 format\n";
+			$objWriter = new PHPExcel_Writer_Excel2007($objPHPExcel);
+			$objWriter->save(str_replace('.php', '.xlsx', __FILE__));
+
+			// Echo done
+			echo date('H:i:s') . " Done writing file.\r\n";
+        echo json_encode(array('equipments'=>$equipments,'links'=>$this->ajax_pagination->create_links()));
+        die();
+		
+	}
+	public function location($params)
+	{
+		$all_rec = $this->Location_model->get_locations($params,1);
+		if(!$all_rec)
+			$all_rec=array();
+		$totalRec=count($all_rec);
+		$location  = $this->Location_model->get_locations($params);
+		if(!$location)
+			$location=array();
+		$recordsFiltered=count($location);
+		$result=array();
+		$deletee = CHECK_PERMISSION(LOCATION,DELETEE);
+		$updatee= CHECK_PERMISSION(LOCATION,UPDATEE);
+		
+		foreach ($location as $row) {
+			$single=array($row->name,$row->country_name,$row->company_name, count(explode(',',$row->divisions)), '<td class="project_progress">
+                                <div class="progress progress_sm">
+                                  <div class="progress-bar bg-green" role="progressbar" data-transitiongoal="57" aria-valuenow="56" style="width: 57%;"></div>
+                                </div>
+                                <small>30% Location</small>
+                              </td>' 
+                              
+                );
+			$last_column='<td>
+			                    <a href="'.base_url('Location/detail_view/'.$row->id).'" class="btn btn-primary btn-xs" ><i class="fa fa-eye"></i> View </a>';
+			if($updatee)
+			{
+				$last_column.=' <a href="'.base_url("Location/edit/".$row->id).'" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i> Edit </a>';
+			}
+			if($deletee)
+			{
+				$last_column.=' <a href="#" class="btn btn-danger  remove delete_item btn-xs" data-pk="'.$row->id.'" data-action-type="location"><i class="fa fa-trash-o"></i> Delete </a>';
+			}
+			$last_column.='</td>';
+			array_push($single,$last_column);
+			array_push($result,$single);
+		}
+		$output = array(
+	        "draw" => $params["draw"],
+	        "recordsTotal" => $totalRec ,//count($location),
+	        "recordsFiltered" =>$totalRec, //count($location),
+	        "data" => $result
+	    );
+		echo  json_encode($output);
+
+		die();
+	}
+	public function users($params)
+	{
+		$all_rec = $this->User_model->get_users($params,1);
+		if(!$all_rec)
+			$all_rec=array();
+		$totalRec=count($all_rec);
+		$users  = $this->User_model->get_users($params);
+		
+		if(!$users)
+			$users=array();
+		$recordsFiltered=count($users);
+		$result=array();
+		$deletee = CHECK_PERMISSION(USER,DELETEE);
+		$updatee= CHECK_PERMISSION(USER,UPDATEE);
+		foreach ($users as $row){
+			$img = $row->picture;
+			if ($img!='') {
+				$user_img = '<td>
+                           <a><img class="td-img" src="'. USER_IMAGE_PATH_REL.$row->picture.'" alt="image"></a><td>';
+			}
+			else
+			{
+				$user_img ='<td>
+                           <a><img class="td-img" src="'.base_url('assets/images/users/default.jpg').'" alt="image"></a><td>';
+			}
+			$single=array($user_img, $row->name,$row->middle_name , $row->last_name,$row->role_name ,$row->email, $row->password
+                              );
+			if($deletee || $updatee)
+			{
+				$last_column='<td>';
+				if($updatee)
+				{
+					$last_column.='<a href="'.base_url("User/edit/".$row->id).'" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i> Edit </a>';
+				}
+				if($deletee)
+				{
+					$last_column.=' <a href="#" class="btn btn-danger  remove delete_item btn-xs" data-pk="'.$row->id.'" data-action-type="users"><i class="fa fa-trash-o"></i> Delete </a>';
+				}
+				$last_column.='</td>';
+			}
+			
+			array_push($single,$last_column);
+			array_push($result,$single);
+		}
+		$output = array(
+	        "draw" => $params["draw"],
+	        "recordsTotal" => $totalRec ,//count($location),
+	        "recordsFiltered" =>$totalRec, //count($location),
+	        "data" => $result
+	    );
+		echo  json_encode($output);
+
+		die();
+	}
+
+	public function divisions($params)
+	{
+		$all_rec = $this->Division_model->get_divisions($params,1);
+		if(!$all_rec)
+			$all_rec=array();
+		$totalRec=count($all_rec);
+		$divisions  = $this->Division_model->get_divisions($params);
+		
+		if(!$divisions)
+			$divisions=array();
+		$recordsFiltered=count($divisions);
+		$result=array();
+		$deletee = CHECK_PERMISSION(DIVISION,DELETEE);
+		$updatee= CHECK_PERMISSION(DIVISION,UPDATEE);
+		foreach ($divisions as $row){
+            $single=array($row->name,$row->country_name,$row->company_name ,'<td class="project_progress">
+                    <div class="progress progress_sm">
+                      <div class="progress-bar bg-green" role="progressbar" data-transitiongoal="57" aria-valuenow="56" style="width: 57%;"></div>
+                    </div>
+                    <small>30% Location</small>
+                  </td>'
+            );
+		        
+			if($deletee || $updatee)
+			{
+				$last_column='<td>';
+				if($updatee)
+				{
+					$last_column.=' <a href="'.base_url("Division/edit/".$row->id).'" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i> Edit </a>';
+				}
+				if($deletee)
+				{
+					$last_column.=' <a href="#" class="btn btn-danger  remove delete_item btn-xs" data-pk="'.$row->id.'" data-action-type="division"><i class="fa fa-trash-o"></i> Delete </a>';
+				}
+				$last_column.='</td>';
+			}
+			
+			array_push($single,$last_column);
+	          
+			array_push($result,$single);
+		}
+		$output = array(
+	        "draw" => $params["draw"],
+	        "recordsTotal" => $totalRec ,//count($location),
+	        "recordsFiltered" =>$totalRec, //count($location),
+	        "data" => $result
+	    );
+		echo  json_encode($output);
+
+		die();
+	}
+	function edit_manufacturer($params)
+	{
+		$id = $params['id'];
+		
+		if (isset($params['name']) && $params['name']!= ''){
+			$data['name'] = $params['name'];
+		}
+		
+		if (isset($params['phone']) && $params['phone']!='') {
+			$data['phone'] = $params['phone'];
+		}
+		if (isset($params['address']) && $params['address']!='') {
+			$data['address'] = $params['address'];
+		}
+
+		$result = $this->Manufacturer_model->update_manufacturer($data,$id);
+		if($result)
+		{
+			die(json_encode(array('flag'=>1,'message'=>'Record updated Successfully.', 'url'=>'Manufacturer/view')));
+		}
+		else
+			die(json_encode(array('flag'=>0,'message'=>'DB operation failed.')));
+	}
+
+	public function companies($params)
+	{
+		$all_rec = $this->Company_model->get_companies($params,1);
+		if(!$all_rec)
+			$all_rec=array();
+		$totalRec=count($all_rec);
+		$companies  = $this->Company_model->get_companies($params);
+		
+		if(!$companies)
+			$companies=array();
+		$recordsFiltered=count($companies);
+		$result=array();
+		$deletee = CHECK_PERMISSION(COMPANY,DELETEE);
+		$updatee= CHECK_PERMISSION(COMPANY,UPDATEE);
+		foreach ($companies as $row){
+			
+	            $single=array($row->name,$row->country_name,'<td class="project_progress">
+	                    <div class="progress progress_sm">
+	                      <div class="progress-bar bg-green" role="progressbar" data-transitiongoal="'.$row->total_company.'" aria-valuenow="0"></div>
+	                    </div>
+	                    <small>'.number_format($row->total_company,2).'%</small>
+	                  </td>'
+                );
+		        
+			if($deletee || $updatee)
+			{
+				$last_column='<td><a href="'.base_url('Company/detail_view/'.$row->id).'" class="btn btn-primary btn-xs" ><i class="fa fa-eye"></i> View </a>';
+				if($updatee)
+				{
+					$last_column.=' <a href="'.base_url("Company/edit/".$row->id).'" class="btn btn-info btn-xs"><i class="fa fa-pencil"></i> Edit </a>';
+				}
+				if($deletee)
+				{
+					$last_column.=' <a href="#" class="btn btn-danger  remove delete_item btn-xs" data-pk="'.$row->id.'" data-action-type="company"><i class="fa fa-trash-o"></i> Delete </a>';
+				}
+				$last_column.='</td>';
+			}
+			
+			array_push($single,$last_column);
+	          
+			array_push($result,$single);
+		}
+		$output = array(
+	        "draw" => $params["draw"],
+	        "recordsTotal" => $totalRec ,//count($location),
+	        "recordsFiltered" =>$totalRec, //count($location),
+	        "data" => $result
+	    );
+		echo  json_encode($output);
+
+		die();
+	}
+	public function user_add_location($params)
+	{
+		$all_rec = $this->Location_model->get_locations($params,1);
+		if(!$all_rec)
+			$all_rec=array();
+		$totalRec=count($all_rec);
+		$location  = $this->Location_model->get_locations($params);
+		
+		if(!$location)
+			$location=array();
+		$recordsFiltered=count($location);
+		$result=array();
+		$deletee = CHECK_PERMISSION(LOCATION,DELETEE);
+		$updatee= CHECK_PERMISSION(LOCATION,UPDATEE);
+		
+		foreach ($location as $row) {
+			$single=array($row->name,$row->company_name, $row->divisions_name ,$row->country_name);
+			$last_column='<td>
+			                    <a href="#" data-toggle="tooltip" title="Click To attach with location" data-placement="bottom" class="link-to-user btn btn-info btn-xs" data-id="'.$row->id.'" data-name="'.$row->name.'"><i class=""></i> Select</a>';
+
+			$last_column.='</td>';
+			array_push($single,$last_column);
+			array_push($result,$single);
+		}
+		$output = array(
+	        "draw" => $params["draw"],
+	        "recordsTotal" => $totalRec ,//count($location),
+	        "recordsFiltered" =>$totalRec, //count($location),
+	        "data" => $result
+	    );
+		echo  json_encode($output);
+
+		die();
+	}
+	public function save_file($params)
+	{
+
+		ini_set("memory_limit","1024M");
+		set_time_limit (1200);
+		$get_picture=0;
+		$inputFileName =$_FILES['post_file']['tmp_name'];
+		if(isset($_FILES["image_file"]) && $_FILES["image_file"]["error"]==0 && $_FILES["image_file"]["size"]>0)
+		{
+			$get_picture=1;
+			$file=$_FILES["image_file"]["tmp_name"];
+			$file_name=substr($_FILES["image_file"]["name"], 0,strlen($_FILES["image_file"]["name"])-4);
+			$zip = new ZipArchive;
+			$res = $zip->open($file);
+			
+			if ($res === TRUE) {
+			    //echo 'ok';
+			    //die();
+			    $zip->extractTo('assets/imgFolder/');
+			    $zip->close();
+			} else {
+				$this->response(array('status'=>0,'message'=>"Could not open Zipped File."), 200);	
+				//echo 'failed, code:' . $res;
+			    //die();
+			}
+		}
+		
+		//  Read your Excel workbook
+		try {
+		    $inputFileType = PHPExcel_IOFactory::identify($inputFileName);
+		    $objReader = PHPExcel_IOFactory::createReader($inputFileType);
+		    $objPHPExcel = $objReader->load($inputFileName);
+		} catch(Exception $e) {
+			$this->response(array('status'=>0,'message'=>'Error loading file "'.pathinfo($inputFileName,PATHINFO_BASENAME).'": '.$e->getMessage()), 404);
+
+		}
+		$fname=substr ( $_FILES['post_file']['name'],0,strlen($_FILES['post_file']['name'])-5).substr(uniqid(),11,3);
+		$myfile = fopen("assets/logsFiles/".$fname.".txt", "w") ;
+		$txt="			ECMS SHEET UPLOAD LOGS \r\n ";
+		fwrite($myfile, $txt);
+		$record_saved=0;
+		$failed=0;
+		$sheet_count=$objPHPExcel->getSheetCount();
+		for ($i=0; $i <$sheet_count ; $i++) { 
+			
+		
+			$sheet = $objPHPExcel->getSheet($i); 
+			$highestRow = $sheet->getHighestRow(); 
+			$highestColumn = $sheet->getHighestColumn();
+			for ($row = 2; $row <= $highestRow; $row++){
+				$not_to_save=0;
+				$row_data = $sheet->rangeToArray('A' . $row . ':' . $highestColumn . $row,
+				                                    NULL,
+				                                    TRUE,
+				                                    FALSE);
+				$obj=$row_data[0];                                   
+							  
+				$data=array();
+				if(!empty($obj[0]) && $obj[0]!='')
+				{
+					if (!empty($obj[0]) && $obj[0]!='') {
+						$data['badge_number']=$obj[0];
+						$badge_number=$this->User_model->check_badge($data['badge_number']);
+						if($badge_number)
+						{
+							$not_to_save=1;
+							$txt=" Sheet # ".$i."\r\n";
+							$txt.=" Row # ".$row."\r\n";
+							$txt.=" Badge Number Already Exist : ".$data['badge_number']."\r\n";
+							fwrite($myfile, $txt);
+							$failed++;
+						}
+					}
+					else
+					{
+						$data['badge_number'] = '';
+					}
+					if(!empty($obj[1]) && $obj[1]!='')
+					{
+						$data['name']=$obj[1];
+					}
+					else
+					{
+						$data['name']="";
+					}
+					
+					if(!empty($obj[2]) && $obj[2]!='')
+					{
+						$data['middle_name'] =$obj[2];
+					}
+					else
+					{
+						$data['middle_name']="";
+					}
+					if(!empty($obj[3]) && $obj[3]!='')
+					{
+						$data['last_name'] =$obj[3];
+					}
+					else
+					{
+						$data['last_name']="";
+					}
+					//check 
+					if(!empty($obj[4]) && $obj[4]!='')
+					{
+						$data['email']=$obj[4];
+						$email=$this->User_model->check_user($data['email']);
+						if($email)
+						{
+							$not_to_save=1;
+							$txt=" Sheet # ".$i."\r\n";
+							$txt.=" Row # ".$row."\r\n";
+							$txt.=" Email Already Exist : ".$data['email']."\r\n";
+							fwrite($myfile, $txt);
+							$failed++;
+						}
+					}
+					else
+					{
+						$data['email']="";
+					}
+
+					if(!empty($obj[5]) && $obj[5]!='')
+					{
+						$role_id = $this->User_model->get_role_id();
+						$data['password']=$obj[5];
+						$data['role_id']=$role_id->id;
+						$data['datetime']=date('Y-m-d H:i:s');
+					}
+					else
+					{
+						$data['password']="";
+					}
+					
+					if(!empty($data)  && $not_to_save==0)
+					{
+						$user_id = $this->User_model->add_users($data);
+						if(!empty($obj[6]) && $obj[6]!='')
+						{
+							
+							$loc_str=$obj[6];
+							//$loc_arra = $loc_str['location'];
+							$locat = explode(',' , $loc_str);
+							for ($i=0; $i <sizeof($locat) ; $i++) { 
+								$location_id = $this->User_model->get_locationName($locat[$i]);
+								if ($location_id) {
+									$dat=array('location_id'=>$location_id->id , 'user_id'=>$user_id , 'datetime' => date('Y-m-d H:i:s'));
+									$result = $this->User_model->add_attach_user_location($dat);
+								}
+								else
+								{
+									$not_to_save=1;
+									$txt=" Sheet # ".$i."\r\n";
+									$txt.=" Row # ".$row."\r\n";
+									$txt.=" Location not found in recoard : ".$locat[$i]."\r\n";
+									fwrite($myfile, $txt);
+									$failed++;
+									$result = 0;
+								}
+								
+							}
+							
+						}
+						else
+						{
+							$dat['location']="";
+						}
+						$record_saved++;
+						
+					}
+					else
+					{
+						$result = 0;
+					}
+				}
+				else
+				{
+					break;
+				}
+					
+			}
+		}
+		$txt="Total ".$row."\r\n";
+		$txt="Successfully Saved ".$record_saved."\r\n";
+		$txt.=" Failed ".$failed." \r\n ";
+		fwrite($myfile, $txt);
+		fclose($myfile);
+		die(json_encode(array('flag' => 1, 'message' => 'Kindly Check Log File for results' ,'file'=>$fname.".txt")));
+		//$this->response(array('status'=>1,'message'=>"Successfully Uploaded.Check Files for Logs.","file"=>$fname.'.txt'), 200);
+	}
+	public function download($attached_file)
+	{
+
+		$src=base_url('assets/logsFiles')."/".$attached_file;
+		
+		$url_stuff = parse_url($src); 
+		$port = isset($url_stuff['port']) ? $url_stuff['port'] : 80; 
+		$fp = fsockopen($url_stuff['host'], $port); 
+		$query  = 'GET ' . $url_stuff['path'] . " HTTP/1.0\n"; 
+		$query .= 'Host: ' . $url_stuff['host']; 
+		$query .= "\n\n"; 
+		$buffer=null;
+		fwrite($fp, $query); 
+		while ($tmp = fread($fp, 1024)) 
+		{ 
+		    $buffer .= $tmp; 
+		} 
+
+		preg_match('/Content-Length: ([0-9]+)/', $buffer, $parts); 
+		header('Content-Description: File Transfer');
+		header('Content-Type:application/octet-stream');
+		header('Content-Disposition: attachment; filename='.basename($attached_file));
+		header('Content-Transfer-Encoding: binary');
+		header('Expires: 0');
+		header('Cache-Control: must-revalidate, post-check=0, pre-check=0');
+		header('Pragma: public');
+
+		$content = substr($buffer, - $parts[1]); 
+		echo $content;
+		
+	}
+	function get_equipment_certification_history(){
+		//
+		$history=$this->Equipment_model->get_attached_certification_history_by_certification_id_and_equipment_id($id,$equipment_id);
+	}
+}
+?>
